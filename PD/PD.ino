@@ -34,22 +34,6 @@ medias deslizante
 */
 const float Ts = 50;    // Periodo de muestreo (50 ms)
 
-// *********** Parametros del Filtro de Media Movil *************
-#define N 20              // Número de muestras para suavizar
-float vel_buffer[N] = {0};  // Buffer circular de velocidades
-int index = 0;            // Índice del buffer
-float suma_vel = 0;       // Suma de las velocidades almacenadas
-
-// Función para filtrar la velocidad en tiempo real
-float filtrarVelocidad(float nueva_vel) {
-    suma_vel -= vel_buffer[index];  // Restar la muestra más antigua
-    vel_buffer[index] = nueva_vel;  // Almacenar la nueva velocidad
-    suma_vel += nueva_vel;  // Sumar la nueva muestra
-
-    index = (index + 1) % N;  //Avanzar el índice circular
-
-    return suma_vel / N;  // Devolver la velocidad filtrada
-}
 
 void setup()
 {
@@ -76,20 +60,6 @@ void loop()
     // Cálculo del error de posición
     int ekT = ref - pos;
 
-    // Incremento de la posicion 
-    //float delta_pos = pos_act - pos_ant;
-    //float delta_t = t_act - t_ant;   
-    /*
-     * Entender velocidad como el incremento de la posicion con respecto al incremento del tiempo.
-     * Incremento de la posicion = pos_act - pos_ant
-     * Incremento del tiempo = Tiempo de ejecución de una iteración el ciclo loop conteniendo sus instrucciones
-     * Incremento del tiempo = Diferencia del tiempo de ejecución (en constante aumento) entre lectura de posicion
-     */
-    
-    // Aplicar el filtro de media móvil
-    //float vel_act = filtrarVelocidad(vel_nueva);
-
-    pos = pos_act;
 
     // Derivada numérica (error por segundo)
     float dedt = (ekT - ekT_ant);  
@@ -105,17 +75,16 @@ void loop()
     (mkT > 0) ? sentidoAntiHor((byte) valpwm) : sentidoHor((byte) valpwm);
 
 
-    // Guardar valores previos
-    ekT_ant = ekT;
-
     // Envío de datos para depuración
     Serial.print("\t Pref:");
     Serial.print(ref);
     Serial.print("\t Pos:");
     Serial.println(pos);
-    //Serial.print("\t Vel:");
-    //Serial.println(vel_act); 
-
+   
+    // Guardar valores previos
+    pos = pos_act;
+    ekT_ant = ekT;
+    
     // Delay ajustado al periodo de muestreo
     delay(Ts);  // **Convertir Ts de segundos a milisegundos**
 }
