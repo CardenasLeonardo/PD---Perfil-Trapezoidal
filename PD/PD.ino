@@ -1,3 +1,7 @@
+/*
+ * Primera recomendacion del Doctor
+ * Kp=20 , Kd = decima parte
+ */
 #define ENCA 2 // Amarillo
 #define ENCB 3 // Morado
 #define PWM1 5
@@ -11,8 +15,8 @@ float ekT_ant = 0;        // Error anterior
 float sum_ekT = 0;        // Suma del error 
 
 // *********** Parametros del PID *************
-float Kp = 3.0;           // Constante proporcional
-float Kd = 0.50;  
+float Kp = 1.0;           // Constante proporcional
+float Kd = 0.5;  
 /* Constante derivativa generalmente menor que 1 probar con la mitad, decima o quinta parte de Kp.
 Incorporar filtro pasabajos, amortiguar el ruido antes de inyectarlo
 promedio ponderado
