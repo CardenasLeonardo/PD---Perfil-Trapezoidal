@@ -1,9 +1,9 @@
 /*
  * Observaciones:
- * La velocidad al ser una derivada de la posicion pronuncia el ruido, por lo que se necesita incorporar un filtro.
- * Se debe valorar si se debe filtrar de igual forma la parte derivativa del control.
- * Aumentar el numero de WINDOW_SIZE, es decir las lecturas con las que se construye el filtro de la velocidad provoca un retraso
- *  de la misma con respecto a la posicion.
+ * Se muestra la grafica de la posicion en respuesta al perfil de velocidad trapezoidal como ejercicio de comparacion con respecto 
+ *  al perfil de velocidad mostrado por el control.
+ * En primera instancia se desea alcanzar un unico punto por lo que se coloca en el setup, para evolucionar con el igngreso de multiples puntos
+ *  se debe tomar otra estrategia o modificar esta colocandola en el loop
  * 
  */
 #define ENCA 2 // Amarillo
@@ -31,7 +31,10 @@ const float cv = fc/(2*Ts); // Factor de conversion para escalar vista de veloci
 float vel_history[WINDOW_SIZE];  // Arreglo para almacenar las últimas velocidades
 int vel_index = 0;               // Índice para acceder a las velocidades más recientes
 
-
+// *********** Parametros del perfil trapezoidal *************
+float vmax = 1000; // Velocidad máxima en pulsos/s
+float acc = 500;   // Aceleración en pulsos/s^2
+float t_acc, t_const, t_total;
 
 void setup()
 {
@@ -51,6 +54,9 @@ void setup()
     // Asegurar que las interrupciones estén activadas desde el inicio
     noInterrupts();  // Desactivar interrupciones al inicio si es necesario
     interrupts();    // Activar interrupciones después de la configuración
+
+    //Calcular tiempos del perfil
+    calcularPerfilTrapezoidal();
 }
 
 void loop()
@@ -86,16 +92,25 @@ void loop()
     // Aplicación al motor con cambio de giro
     (mkT > 0) ? sentidoAntiHor((byte) valpwm) : sentidoHor((byte) valpwm);
 
+    // Perfil para comparar
+    float tiempo = millis() / 1000.0;
+    float vel_trapezoidal = 0;
+    if (tiempo < t_acc) {
+        vel_trapezoidal = acc * tiempo;
+    } else if (tiempo < t_acc + t_const) {
+        vel_trapezoidal = vmax;
+    } else if (tiempo < t_total) {
+        vel_trapezoidal = vmax - acc * (tiempo - t_acc - t_const);
+    }
+
+    
 
     // Envío de datos para depuración
-    Serial.print("\t Pref:");
-    Serial.print(ref);
-    Serial.print("\t Pos:");
-    Serial.print(pos);
-    Serial.print("\t Vel p/s:");
-    Serial.print(vel*cv); // operacion para mejorar la escala
-    Serial.print("\t Vel filtrada p/s:");
-    Serial.println(vel_filtered*cv); // operacion para mejorar la escala
+    Serial.print("\t Pref:");Serial.print(ref);
+    Serial.print("\t Pos:");Serial.print(pos);
+    Serial.print("\t Vel p/s:");Serial.print(vel*cv); // operacion para mejorar la escala
+    Serial.print("\t Vel filtrada p/s:");Serial.print(vel_filtered*cv); // operacion para mejorar la escala
+    Serial.print("\t Vel trapezoidal:"); Serial.println(vel_trapezoidal);
     
    
     // Guardar valores previos
@@ -126,4 +141,12 @@ void sentidoAntiHor(byte vel)
 {
     analogWrite(PWM1, vel);
     analogWrite(PWM2, 0);
+}
+
+void calcularPerfilTrapezoidal() {
+    t_acc = vmax / acc;
+    float x_acc = 0.5 * acc * t_acc * t_acc;
+    float x_remain = ref - 2 * x_acc;
+    t_const = x_remain / vmax;
+    t_total = 2 * t_acc + t_const;
 }
