@@ -1,6 +1,15 @@
 /*
- * Primera recomendacion del Doctor
- * Kp=20 , Kd = decima parte
+ *Tuneado con Kp=1 , Kd=0.5 , Ts =50
+ *Observaciones: si se disminuye Ts, no alcanza ls referencia, si aumenta lo sobrepasa
+ *Hipotesis: Se necesita demasiado error para mover el motor
+ *  Un error pequeño se refleja en un pwm pequeño, pero no es suficiente para mover el motor
+ *  Existe un rango de PWM donde el motor permanece inmovil, de tal forma que PWM < tolerancia = 0
+ *  Incluir una correccion considerando un error incremental reduce el estado estacionario, se desea una respuesta  
+ *    criticamente amortiguada, debe considerarse la parte I para resolverlo, esto tambien garantiza una solucion
+ *    a errores donde se sobrepasa la referencia aunque generaria una respuesta subamortiguada (indeseada)
+ *  Aumentar Kp vuelve mas agresivo el sistema pues un error pequeño provoca una correccion mayor y debe modificarse cada que se cambie el Ts, 
+ *    haciendo esto no es necesario colocar la parte incremental del controlador.
+ *  Incorporar la parte integral requeire incorporar una correcion al windup en cada cambio de signo del error
  */
 #define ENCA 2 // Amarillo
 #define ENCB 3 // Morado
@@ -14,7 +23,7 @@ int ref = 800;           // En pulsos
 float ekT_ant = 0;        // Error anterior 
 float sum_ekT = 0;        // Suma del error 
 
-// *********** Parametros del PID *************
+// *********** Parametros del PD *************
 float Kp = 1.0;           // Constante proporcional
 float Kd = 0.5;  
 /* Constante derivativa generalmente menor que 1 probar con la mitad, decima o quinta parte de Kp.
