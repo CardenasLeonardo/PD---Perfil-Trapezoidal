@@ -1,17 +1,10 @@
 /*
  * Observaciones:
- * La unidad de tiempo en los procesos del codigo son ms
- * La unidad de desplazamiento son pulsos
- * La unidad de velocidad son pulsos/Ts = pulsos/50 ms y puede convertirse a pulsos/ms al multiplicar la tasa resultate por Ts.
- *  Esto involucra varias consideraciones
- *  La diferencia entre la posicion actual con la anterior representa pulsos/ms, debe multiplicarse por 1000 para tener pulsos/s
- *  Esto en parte explicar porque el calculo de la parte derivativa del control funciona con una resta simplemente, resulta interesante
- *  considerar Ts y la conversion.
+ * La velocidad al ser una derivada de la posicion pronuncia el ruido, por lo que se necesita incorporar un filtro.
+ * Se debe valorar si se debe filtrar de igual forma la parte derivativa del control.
+ * Aumentar el numero de WINDOW_SIZE, es decir las lecturas con las que se construye el filtro de la velocidad provoca un retraso
+ *  de la misma con respecto a la posicion.
  * 
- *  Para lograr estose debe considerar el delay al final del void loop, encargado del retarde en cada iteracion, una consideracion es 
- *  implementar el un condicional con millis para lograr el mismo cometido sin las implicaciones de un delay.
- *  El delay usa ms de forma predeterminada, por conveniencia esto rige las unidades de tiempo.
- *  El Ts no esta presente en el calculo de la parte derivativa, y es absorbido por las constantes Kp y Kd.
  */
 #define ENCA 2 // Amarillo
 #define ENCB 3 // Morado
@@ -21,22 +14,23 @@
 int pos = 0; 
 volatile int pos_act = 0; // Variable compartida con la interrupción
 
-int ref = 800;           // En pulsos
+int ref = 3000;           // En pulsos
 float ekT_ant = 0;        // Error anterior 
 float sum_ekT = 0;        // Suma del error 
 
 // *********** Parametros del PD *************
 float Kp = 1.0;           // Constante proporcional
 float Kd = 0.5;  
-/* Constante derivativa generalmente menor que 1 probar con la mitad, decima o quinta parte de Kp.
-Incorporar filtro pasabajos, amortiguar el ruido antes de inyectarlo
-promedio ponderado
-Cosenos Senos?
-medias deslizante
-*/
 const float Ts = 50;    // Periodo de muestreo (50 ms)
 const float fc = 1000;   // Factor de conversion de ms a s
-const float cv = fc/(2*Ts);
+const float cv = fc/(2*Ts); // Factor de conversion para escalar vista de velocidad.
+
+
+// *********** Parametros del filtro de la velocidad *************
+#define WINDOW_SIZE 5  // Tamaño de la ventana para el filtro de media móvil
+float vel_history[WINDOW_SIZE];  // Arreglo para almacenar las últimas velocidades
+int vel_index = 0;               // Índice para acceder a las velocidades más recientes
+
 
 
 void setup()
@@ -68,7 +62,17 @@ void loop()
     float vel = pos_act - pos;            //vel = pulsos/ms
     //float vel = (pos_act - pos)*fc;       //vel = pulsos/s
     
-    
+    // Aplicar filtro de media móvil
+    vel_history[vel_index] = vel;  // Guardamos la nueva velocidad
+    vel_index = (vel_index + 1) % WINDOW_SIZE;  // Incrementamos el índice, asegurándonos de que no se salga del rango del arreglo
+
+    // Calcular la media de los valores en el arreglo
+    float vel_filtered = 0;
+    for (int i = 0; i < WINDOW_SIZE; i++) {
+        vel_filtered += vel_history[i];
+    }
+    vel_filtered /= WINDOW_SIZE;  // Promedio de las últimas velocidades
+
     // Derivada numérica (error por segundo)
     float dedt = (ekT - ekT_ant);  
 
@@ -89,7 +93,10 @@ void loop()
     Serial.print("\t Pos:");
     Serial.print(pos);
     Serial.print("\t Vel p/s:");
-    Serial.println(vel*cv); // operacion para mejorar la escala
+    Serial.print(vel*cv); // operacion para mejorar la escala
+    Serial.print("\t Vel filtrada p/s:");
+    Serial.println(vel_filtered*cv); // operacion para mejorar la escala
+    
    
     // Guardar valores previos
     pos = pos_act;

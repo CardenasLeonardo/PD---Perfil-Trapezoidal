@@ -1,51 +1,41 @@
-import serial
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 
-ser = serial.Serial("COM3", 9600)  # Asegúrate de usar el puerto correcto
+# Datos de tiempo en segundos (0, 1, 2, ..., etc.)
+timestamps = [
+    0, 0.048, 0.143, 0.190, 0.285, 0.332, 0.380, 0.475, 0.521, 0.567, 
+    0.660, 0.706, 0.799, 0.847, 0.895, 0.988, 1.034, 1.080, 1.178, 
+    1.224, 1.271, 1.364, 1.412, 1.459, 1.514, 1.608, 1.654, 1.701, 
+    1.794, 1.840, 1.887, 1.981, 2.027, 2.074, 2.167, 2.213, 2.260
+]
 
-# Inicialización de listas para los datos a graficar
-x_data, pos_data, vel_data = [], [], []
+# Datos de posición y velocidad
+positions = [
+    0, 26, 87, 141, 195, 248, 308, 372, 437, 494, 545, 600, 657, 709, 745,
+    769, 784, 794, 798, 798, 798, 798, 798, 798, 798, 798, 798, 798, 798,
+    798, 798, 798, 798, 798, 798, 798
+]
 
-# Crear la figura y los subgráficos
-fig, (ax1, ax2) = plt.subplots(2, 1)
+velocities = [
+    260.00, 520.00, 440.00, 370.00, 460.00, 490.00, 520.00, 470.00, 440.00,
+    400.00, 410.00, 440.00, 420.00, 280.00, 190.00, 130.00, 80.00, 40.00, 0.00,
+    0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00,
+    0.00, 0.00, 0.00, 0.00, 0.00
+]
 
-# Función de actualización para la animación
-def update(frame):
-    # Leer la línea del puerto serial
-    line = ser.readline().decode().strip()
-    
-    # Separar los valores de posición y velocidad
-    values = line.split("\t")
-    
-    # Asegurarse de que haya dos valores (posición y velocidad)
-    if len(values) == 2:
-        try:
-            # Añadir los datos a las listas
-            x_data.append(frame)
-            pos_data.append(int(values[0]))  # Convertir la posición a entero
-            vel_data.append(float(values[1]))  # Convertir la velocidad a flotante
-        except ValueError:
-            return
+filtered_velocities = [
+    26.00, 78.00, 122.00, 159.00, 205.00, 254.00, 306.00, 353.00, 397.00,
+    437.00, 452.00, 444.00, 442.00, 433.00, 406.00, 370.00, 326.00, 283.00, 
+    239.00, 199.00, 158.00, 114.00, 72.00, 44.00, 25.00, 12.00, 4.00, 0.00, 
+    0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00
+]
 
-        # Limitar la cantidad de datos para evitar problemas de memoria
-        if len(x_data) > 100:  # Limita los datos a los últimos 100 puntos
-            x_data.pop(0)
-            pos_data.pop(0)
-            vel_data.pop(0)
-
-        # Limpiar los ejes y graficar los nuevos datos
-        ax1.clear()
-        ax2.clear()
-
-        # Graficar los datos en los subgráficos
-        ax1.plot(x_data, pos_data, 'r')
-        ax1.set_title("Posición")
-
-        ax2.plot(x_data, vel_data, 'b')
-        ax2.set_title("Velocidad")
-
-# Crear la animación con un número ilimitado de cuadros
-ani = animation.FuncAnimation(fig, update, interval=100)
-
+# Graficar los datos
+plt.figure(figsize=(10, 6))
+plt.plot(timestamps, velocities, label='Velocidad p/s', color='green')
+plt.plot(timestamps, filtered_velocities, label='Velocidad filtrada p/s', color='red')
+plt.xlabel('Tiempo (s)')
+plt.ylabel('Velocidad (p/s)')
+plt.title('Velocidad en función del tiempo')
+plt.legend()
+plt.grid(True)
 plt.show()
