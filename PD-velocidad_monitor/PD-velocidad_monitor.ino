@@ -1,11 +1,3 @@
-/*
- * Observaciones:
- * Se muestra la grafica de la posicion en respuesta al perfil de velocidad trapezoidal como ejercicio de comparacion con respecto 
- *  al perfil de velocidad mostrado por el control.
- * En primera instancia se desea alcanzar un unico punto por lo que se coloca en el setup, para evolucionar con el igngreso de multiples puntos
- *  se debe tomar otra estrategia o modificar esta colocandola en el loop
- * 
- */
 #define ENCA 2 // Amarillo
 #define ENCB 3 // Morado
 #define PWM1 5
@@ -14,27 +6,52 @@
 int pos = 0; 
 volatile int pos_act = 0; // Variable compartida con la interrupción
 
-int ref = 3000;           // En pulsos
+int ref = 2000;           // En pulsos
 float ekT_ant = 0;        // Error anterior 
-float sum_ekT = 0;        // Suma del error 
 
 // *********** Parametros del PD *************
-float Kp = 1.0;           // Constante proporcional
-float Kd = 0.5;  
-const float Ts = 50;    // Periodo de muestreo (50 ms)
-const float fc = 1000;   // Factor de conversion de ms a s
-const float cv = fc/(2*Ts); // Factor de conversion para escalar vista de velocidad.
-
+float Kp = 3.0;   // Reducir para que la posición no domine tanto
+float Kd = 0.14;   // Agregar un poco de amortiguación
+float Kv = 1.0;    // Aumentar para que la velocidad tenga más peso
+const float Ts = 50;      // Periodo de muestreo (50 ms)
+const float fc = 1000;    // Factor de conversion de ms a s
+const float cv = fc/(4*Ts); // Factor de conversion para escalar vista de velocidad.
 
 // *********** Parametros del filtro de la velocidad *************
 #define WINDOW_SIZE 5  // Tamaño de la ventana para el filtro de media móvil
 float vel_history[WINDOW_SIZE];  // Arreglo para almacenar las últimas velocidades
 int vel_index = 0;               // Índice para acceder a las velocidades más recientes
 
-// *********** Parametros del perfil trapezoidal *************
-float vmax = 1000; // Velocidad máxima en pulsos/s
-float acc = 500;   // Aceleración en pulsos/s^2
-float t_acc, t_const, t_total;
+// *********** Parámetros del perfil de velocidad trapezoidal *************
+float vmax = 0.5;  // Velocidad máxima en pulsos/ms
+float acc = 0.15;    // Aceleración en pulsos/ms^2
+float t1, t2, t3;   // Tiempos de aceleración, velocidad constante y desaceleración
+float pos_teorica = 0;
+float vel_teorica = 0;
+float tiempo_total = 0;
+unsigned long t_inicio;
+
+void calcularPerfilTrapezoidal() {
+    t1 = vmax / acc;  // Tiempo para alcanzar vmax en ms
+    t3 = t1;          // Tiempo de desaceleración simétrico en ms
+    float d1 = 0.5 * acc * t1 * t1;  // Distancia recorrida en aceleración, medida en pulsos
+    float d3 = d1;                   // Distancia en desaceleración
+    float d2 = ref - (d1 + d3);       // Distancia en velocidad constante
+
+    if (d2 < 0) {
+        // Si no hay suficiente distancia para vmax, recalcular vmax
+        vmax = sqrt(ref * acc);
+        t1 = vmax / acc;
+        t3 = t1;
+        d1 = 0.5 * acc * t1 * t1;
+        d3 = d1;
+        d2 = 0;
+    }
+
+    t2 = d2 / vmax;  // Tiempo en velocidad constante
+    tiempo_total = t1 + t2 + t3;
+    t_inicio = millis();
+}
 
 void setup()
 {
@@ -49,24 +66,18 @@ void setup()
     pinMode(PWM2, OUTPUT);
 
     // Se leerán los pulsos por medio de una interrupción
-    attachInterrupt(digitalPinToInterrupt(ENCA), leePulsos, RISING);
-
-    // Asegurar que las interrupciones estén activadas desde el inicio
-    noInterrupts();  // Desactivar interrupciones al inicio si es necesario
-    interrupts();    // Activar interrupciones después de la configuración
-
-    //Calcular tiempos del perfil
-    calcularPerfilTrapezoidal();
+    attachInterrupt(digitalPinToInterrupt(ENCA), leePulsos, RISING);  
 }
 
 void loop()
 {
+    calcularPerfilTrapezoidal();  // Calcula los tiempos del perfil trapezoidal
+  
     // Cálculo del error de posición
     int ekT = ref - pos;
 
     // Cálculo de la velocidad sin Filtrar
-    float vel = pos_act - pos;            //vel = pulsos/ms
-    //float vel = (pos_act - pos)*fc;       //vel = pulsos/s
+    float vel = pos_act - pos; // vel = pulsos/ms
     
     // Aplicar filtro de media móvil
     vel_history[vel_index] = vel;  // Guardamos la nueva velocidad
@@ -79,11 +90,29 @@ void loop()
     }
     vel_filtered /= WINDOW_SIZE;  // Promedio de las últimas velocidades
 
-    // Derivada numérica (error por segundo)
+    // Generación del perfil trapezoidal
+    float t_actual = (millis() - t_inicio);  // Tiempo en ms
+    if (t_actual < t1) {
+        vel_teorica = acc * t_actual;
+    } else if (t_actual < (t1 + t2)) {
+        vel_teorica = vmax;
+    } else if (t_actual < tiempo_total) {
+        vel_teorica = vmax - acc * (t_actual - (t1 + t2));
+    } else {
+        vel_teorica = 0;
+    }
+
+    // Integración de la velocidad teórica para obtener la posición teórica
+    pos_teorica += vel_teorica * Ts;
+
+    // Cálculo del error de velocidad
+    float eV = vel_teorica - vel_filtered;
+
+    // Derivada numérica (error por milisegundo)
     float dedt = (ekT - ekT_ant);  
 
     // Señal de control (PD)
-    float mkT = Kp * ekT + Kd * dedt;
+    float mkT = Kp * ekT + Kd * dedt + Kv * eV;
     
     // Saturación del PWM
     float valpwm = fabs(mkT);
@@ -92,27 +121,20 @@ void loop()
     // Aplicación al motor con cambio de giro
     (mkT > 0) ? sentidoAntiHor((byte) valpwm) : sentidoHor((byte) valpwm);
 
-    // Perfil para comparar
-    float tiempo = millis() / 1000.0;
-    float vel_trapezoidal = 0;
-    if (tiempo < t_acc) {
-        vel_trapezoidal = acc * tiempo;
-    } else if (tiempo < t_acc + t_const) {
-        vel_trapezoidal = vmax;
-    } else if (tiempo < t_total) {
-        vel_trapezoidal = vmax - acc * (tiempo - t_acc - t_const);
-    }
-
-    
-
     // Envío de datos para depuración
-    Serial.print("\t Pref:");Serial.print(ref);
-    Serial.print("\t Pos:");Serial.print(pos);
-    Serial.print("\t Vel p/s:");Serial.print(vel*cv); // operacion para mejorar la escala
-    Serial.print("\t Vel filtrada p/s:");Serial.print(vel_filtered*cv); // operacion para mejorar la escala
-    Serial.print("\t Vel trapezoidal:"); Serial.println(vel_trapezoidal);
-    
-   
+    Serial.print("\t Pref:");
+    Serial.print(ref);
+    Serial.print("\t Pos:");
+    Serial.print(pos);
+    Serial.print("\t Pos Teorica:");
+    Serial.print(pos_teorica);
+    Serial.print("\t Vel p/s:");
+    Serial.print(vel*cv); // Operación para mejorar la escala
+    Serial.print("\t Vel filtrada p/s:");
+    Serial.print(vel_filtered*cv); // Operación para mejorar la escala
+    Serial.print("\t Vel teorica:");
+    Serial.println(vel_teorica*cv);
+
     // Guardar valores previos
     pos = pos_act;
     ekT_ant = ekT;
@@ -141,12 +163,4 @@ void sentidoAntiHor(byte vel)
 {
     analogWrite(PWM1, vel);
     analogWrite(PWM2, 0);
-}
-
-void calcularPerfilTrapezoidal() {
-    t_acc = vmax / acc;
-    float x_acc = 0.5 * acc * t_acc * t_acc;
-    float x_remain = ref - 2 * x_acc;
-    t_const = x_remain / vmax;
-    t_total = 2 * t_acc + t_const;
 }
