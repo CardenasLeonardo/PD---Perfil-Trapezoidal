@@ -1,7 +1,3 @@
-/*****************************************************/
-/*                Variables globales                 */
-/*****************************************************/
-
 #define ENCA 2 // Amarillo
 #define ENCB 3 // Morado
 #define PWM1 5
@@ -46,9 +42,6 @@ const int N = 5; // Tamaño del filtro (número de muestras a promediar)
 float position_history[N];  // Historial de las últimas N posiciones
 int pos_index = 0;  // Índice para el historial circular
 
-/*****************************************************/
-/*                     setup()                       */
-/*****************************************************/
 void setup() {
   Serial.begin(9600);
 
@@ -79,9 +72,6 @@ void setup() {
   lastControlTime = startTime;
 }
 
-/*****************************************************/
-/*                      loop()                       */
-/*****************************************************/
 void loop() {
   unsigned long now = micros();
   calcularTiempos();
@@ -117,9 +107,7 @@ void loop() {
   Serial.println();
 }
 
-/*****************************************************/
-/*    Generación de la trayectoria trapezoidal       */
-/*****************************************************/
+
 // Genera la trayectoria para alcanzar los puntos finales
 void generarTrayectoria() {
   // t en segundos desde el inicio
@@ -181,9 +169,7 @@ void generarTrayectoria() {
   }
 }
 
-/*****************************************************/
-/*    Calcular los tiempos para la trayectoria       */
-/*****************************************************/
+
 // Calcula los tiempos para el perfil trapezoidal
 void calcularTiempos() {
   // Calculamos el tiempo de aceleración, velocidad constante y desaceleración
@@ -199,9 +185,7 @@ void calcularTiempos() {
   }
 }
 
-/*****************************************************/
-/*    Actualizar los puntos finales con el potenciómetro       */
-/*****************************************************/
+
 // Lee el valor del potenciómetro y actualiza el array de puntos finales
 void actualizarPuntosFinales() {
   // Lee el valor del potenciómetro (de 0 a 1023)
@@ -234,9 +218,6 @@ void actualizarPuntosFinales() {
   aplicarFiltroMediaMovil(mappedValue);
 }
 
-/*****************************************************/
-/*    Aplicar el filtro de media móvil en la posición       */
-/*****************************************************/
 void aplicarFiltroMediaMovil(float nueva_posicion) {
   // Añadir el nuevo valor de la posición al historial
   position_history[pos_index] = nueva_posicion;
